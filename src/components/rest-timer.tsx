@@ -41,19 +41,21 @@ export function RestTimer({
     <View
       style={[
         styles.wrap,
-        { backgroundColor: theme.text, bottom: insets.bottom + Spacing.three },
+        {
+          backgroundColor: theme.backgroundSelected,
+          borderColor: theme.border,
+          bottom: insets.bottom + Spacing.three,
+        },
       ]}>
       <View style={[styles.progress, { width: `${progress * 100}%`, backgroundColor: theme.accent }]} />
       <Row style={{ justifyContent: 'space-between' }}>
         <Row gap={Spacing.two}>
-          <Icon name="timer" size={18} color={theme.background} />
-          <Text variant="number" style={{ color: theme.background }}>
-            {formatDuration(remaining)}
-          </Text>
+          <Icon name="timer" size={18} color="text" />
+          <Text variant="number">{formatDuration(remaining)}</Text>
         </Row>
         <Row gap={Spacing.one}>
-          <Button title="−15" kind="ghost" size="sm" onPress={() => onChange(endAt - 15000, total)} />
-          <Button title="+15" kind="ghost" size="sm" onPress={() => onChange(endAt + 15000, total + 15)} />
+          <Button title="−15" kind="secondary" size="sm" onPress={() => onChange(endAt - 15000, total)} />
+          <Button title="+15" kind="secondary" size="sm" onPress={() => onChange(endAt + 15000, total + 15)} />
           <Button title="Skip" kind="primary" size="sm" onPress={() => onChange(null)} />
         </Row>
       </Row>
@@ -69,6 +71,7 @@ const styles = StyleSheet.create({
     maxWidth: MaxContentWidth - Spacing.four,
     alignSelf: 'center',
     borderRadius: Radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.two,
     overflow: 'hidden',

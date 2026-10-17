@@ -155,7 +155,7 @@ export function SetRowView({
         accessibilityState={{ checked: done }}
         accessibilityLabel={`Complete set ${index + 1}`}
         style={[styles.check, { backgroundColor: done ? theme.success : theme.backgroundElement }]}>
-        <Icon name="check" size={16} color={done ? '#FFFFFF' : theme.textSecondary} />
+        <Icon name="check" size={16} color={done ? theme.onSuccess : theme.textSecondary} />
       </Pressable>
     </View>
   );

@@ -2,36 +2,43 @@ import '@/global.css';
 
 import { Platform } from 'react-native';
 
+// "Cappuccino" palette: #D6B588 caramel, #C6C0B9 warm grey, #705E46 mocha, #422701 espresso.
+// Other tokens are tints and shades of those four. Every text/background pair
+// used in the app meets WCAG AA contrast (4.5:1 for text, 3:1 for icons/UI).
+// The palette has no green or red: completed sets use palette tones and only
+// destructive actions keep a muted red.
 export const Colors = {
   light: {
-    text: '#111214',
-    textSecondary: '#62666D',
-    background: '#F4F4F6',
-    card: '#FFFFFF',
-    backgroundElement: '#ECEDF0',
-    backgroundSelected: '#E0E1E6',
-    border: '#E2E3E7',
-    accent: '#FF5A1F',
-    accentSoft: '#FFE9E0',
+    text: '#422701',
+    textSecondary: '#6B5F52',
+    background: '#F3EFE9',
+    card: '#FBF8F4',
+    backgroundElement: '#E9E3DB',
+    backgroundSelected: '#C6C0B9',
+    border: '#DDD5CB',
+    accent: '#705E46',
+    accentSoft: '#F1E4CF',
     onAccent: '#FFFFFF',
-    success: '#1F9D55',
-    successSoft: '#DDF3E6',
-    danger: '#D93F3F',
+    success: '#705E46',
+    successSoft: '#F0E2CC',
+    onSuccess: '#FFFFFF',
+    danger: '#A3402E',
   },
   dark: {
-    text: '#F4F5F7',
-    textSecondary: '#A1A5AC',
-    background: '#0B0B0D',
-    card: '#17181B',
-    backgroundElement: '#212226',
-    backgroundSelected: '#2D2F34',
-    border: '#2A2C31',
-    accent: '#FF7440',
-    accentSoft: '#3A2117',
-    onAccent: '#FFFFFF',
-    success: '#3DD68C',
-    successSoft: '#123222',
-    danger: '#FF6369',
+    text: '#C6C0B9',
+    textSecondary: '#A1978C',
+    background: '#140C03',
+    card: '#21160A',
+    backgroundElement: '#2E2010',
+    backgroundSelected: '#422701',
+    border: '#3D2C16',
+    accent: '#D6B588',
+    accentSoft: '#33240F',
+    onAccent: '#422701',
+    success: '#D6B588',
+    successSoft: '#3A2A12',
+    onSuccess: '#422701',
+    danger: '#E3907F',
   },
 } as const;
 
