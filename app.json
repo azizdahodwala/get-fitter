@@ -51,6 +51,16 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "fa212adf-a48d-4e9c-9a42-f13194dbaa2b"
+      }
+    },
+    "owner": "azizdahodwala",
+    "updates": {
+      "url": "https://u.expo.dev/fa212adf-a48d-4e9c-9a42-f13194dbaa2b"
     }
   }
 }
