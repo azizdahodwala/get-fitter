@@ -58,4 +58,4 @@ const exercises = all
 
 await mkdir(dirname(OUT), { recursive: true });
 await writeFile(OUT, JSON.stringify(exercises));
-console.log(`Wrote ${exercises.length} exercises to ${OUT}`);
+console.log(`Wrote ${exercises.length} exercises to ${OUT}. Run npm run check-gifs next.`);
