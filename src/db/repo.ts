@@ -2,6 +2,7 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 
 import { defaultMode, getExercise, usesWeight, type TrackingMode } from '@/data/catalog';
 import type { Level } from '@/data/programs';
+import { REMAP_MISSING_GIFS } from '@/db/schema';
 
 // ---------- Types ----------
 
@@ -600,5 +601,6 @@ export async function importBackup(db: SQLiteDatabase, backup: Backup) {
         await db.runAsync(sql, ...cols.map((c) => row[c] ?? null));
       }
     }
+    await db.execAsync(REMAP_MISSING_GIFS);
   });
 }

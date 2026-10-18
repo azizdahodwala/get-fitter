@@ -2,6 +2,7 @@
 // (https://github.com/exercisedb/exercisedb-api); the JSON is downloaded once
 // with `npm run fetch-exercises` and bundled so the app works offline.
 import raw from './exercises.json';
+import missingGifs from './missing-gifs.json';
 
 export type Exercise = {
   id: string;
@@ -25,9 +26,17 @@ export function getExercise(id: string): Exercise | undefined {
   return byId.get(id);
 }
 
+// Exercises whose demo GIF is gone from the CDN (`npm run check-gifs`). They
+// still resolve through getExercise, so old rows keep a name, but are never
+// offered for picking; migration 3 moved existing rows to their replacements.
+const missingGif = new Set(Object.keys(missingGifs));
+
+/** The exercises offered in the library and pickers. */
+const LISTED = EXERCISES.filter((e) => !missingGif.has(e.id));
+
 function countBy(pick: (e: Exercise) => string[]) {
   const counts = new Map<string, number>();
-  for (const e of EXERCISES) for (const v of pick(e)) counts.set(v, (counts.get(v) ?? 0) + 1);
+  for (const e of LISTED) for (const v of pick(e)) counts.set(v, (counts.get(v) ?? 0) + 1);
   return [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([name]) => name);
 }
 
@@ -120,7 +129,7 @@ export type ExerciseFilter = {
 export function filterExercises({ query, bodyPart, equipment }: ExerciseFilter) {
   const tokens = (query ?? '').toLowerCase().split(/\s+/).filter(Boolean);
   const have = equipment ? new Set(equipment) : null;
-  return EXERCISES.filter((e) => {
+  return LISTED.filter((e) => {
     if (bodyPart && !e.bodyParts.includes(bodyPart)) return false;
     if (have && !e.equipment.every((q) => have.has(q))) return false;
     if (tokens.length) {

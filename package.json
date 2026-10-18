@@ -45,6 +45,7 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "fetch-exercises": "node ./scripts/fetch-exercises.mjs",
+    "check-gifs": "node ./scripts/check-gifs.mjs",
     "typecheck": "tsc --noEmit"
   },
   "private": true
