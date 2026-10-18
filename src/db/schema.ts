@@ -87,6 +87,21 @@ const MIGRATIONS: string[] = [
   UPDATE routines SET name = 'Intermediate Upper A' WHERE starter_key = 'int-upper' AND name = 'Intermediate Upper';
   UPDATE routines SET name = 'Intermediate Lower A' WHERE starter_key = 'int-lower' AND name = 'Intermediate Lower';
   `,
+  // Three starter exercises pointed at ExerciseDB ids whose demo GIFs are gone.
+  // Move existing rows to the working duplicate of each, so history stays under
+  // one id. A pref already stored under the new id wins over the old one.
+  `
+  UPDATE routine_exercises SET exercise_id = 'bZGHsAZ' WHERE exercise_id = '1YUWDNZ';
+  UPDATE routine_exercises SET exercise_id = 'wf24o8S' WHERE exercise_id = 'u3UuCZu';
+  UPDATE routine_exercises SET exercise_id = 'S93zLTG' WHERE exercise_id = 'hTLtkXL';
+  UPDATE workout_exercises SET exercise_id = 'bZGHsAZ' WHERE exercise_id = '1YUWDNZ';
+  UPDATE workout_exercises SET exercise_id = 'wf24o8S' WHERE exercise_id = 'u3UuCZu';
+  UPDATE workout_exercises SET exercise_id = 'S93zLTG' WHERE exercise_id = 'hTLtkXL';
+  UPDATE OR IGNORE exercise_prefs SET exercise_id = 'bZGHsAZ' WHERE exercise_id = '1YUWDNZ';
+  UPDATE OR IGNORE exercise_prefs SET exercise_id = 'wf24o8S' WHERE exercise_id = 'u3UuCZu';
+  UPDATE OR IGNORE exercise_prefs SET exercise_id = 'S93zLTG' WHERE exercise_id = 'hTLtkXL';
+  DELETE FROM exercise_prefs WHERE exercise_id IN ('1YUWDNZ', 'u3UuCZu', 'hTLtkXL');
+  `,
 ];
 
 export async function migrateDb(db: SQLiteDatabase) {
