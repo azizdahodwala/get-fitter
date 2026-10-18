@@ -36,6 +36,40 @@ then scan the QR code shown in the terminal (iPhone: with the Camera app).
 
 `npx expo start --web` runs it in a browser too, which is handy for quick checks.
 
+## Install it as an app (Android APK)
+
+Builds run on EAS (Expo's cloud build service), so no Android Studio is needed. The `preview` profile in `eas.json`
+builds an APK you install straight from a link; EAS keeps the signing key and bumps `versionCode` on every build, so
+each new APK installs over the last one and keeps your data.
+
+One-time setup (`update:configure` links the project to your Expo account and adds `updates.url` to `app.json`; keep
+the `fingerprint` runtime version policy that's already there):
+
+```bash
+npx eas-cli@latest login
+npx eas-cli@latest update:configure
+```
+
+Build, then open the link it prints on your phone to install:
+
+```bash
+npx eas-cli@latest build -p android --profile preview
+```
+
+**Shipping changes.** JavaScript-only changes (screens, routines, database migrations) go out as an over-the-air update.
+The app downloads it on launch and switches to it on the next restart:
+
+```bash
+npx eas-cli@latest update --channel preview --environment preview --message "What changed"
+```
+
+Build a new APK instead when native code changes: a new library with native code, an Expo SDK upgrade, or native
+settings in `app.json` such as the icon or package name. The `fingerprint` runtime version keeps an update from
+reaching an APK it isn't compatible with.
+
+Moving from Expo Go to the APK? Expo Go keeps its own copy of the app's data. Export a backup from the Profile tab in
+Expo Go first, then import it in the installed app.
+
 ## Project layout
 
 ```
