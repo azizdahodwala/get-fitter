@@ -1,14 +1,14 @@
 import { router, useFocusEffect } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { Elapsed } from '@/components/elapsed';
 import { PlanCard } from '@/components/plan-card';
 import { RoutineCard } from '@/components/routine-card';
-import { Button, Card, Icon, Row, Screen, SectionHeader, Text } from '@/components/ui';
+import { Button, Card, Chip, Icon, Row, Screen, SectionHeader, Text } from '@/components/ui';
 import { Radius, Spacing } from '@/constants/theme';
-import { LEVELS, levelLabel } from '@/data/programs';
+import { byStarterOrder, LEVELS, levelLabel, type Level } from '@/data/programs';
 import { getActiveWorkout, listRoutines, type RoutineSummary, type Workout } from '@/db/repo';
 import { useTheme } from '@/hooks/use-theme';
 import { getPlanStatus, type PlanStatus } from '@/lib/plan';
@@ -22,7 +22,7 @@ export default function WorkoutsScreen() {
   const [routines, setRoutines] = useState<RoutineSummary[]>([]);
   const [active, setActive] = useState<Workout | null>(null);
   const [plan, setPlan] = useState<PlanStatus | null>(null);
-  const [showAll, setShowAll] = useState(false);
+  const [browsing, setBrowsing] = useState<Level | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -45,7 +45,10 @@ export default function WorkoutsScreen() {
   const start = (routineId?: number) => startWorkoutFlow(db, routineId);
   const mine = routines.filter((r) => !r.starter_key);
   const planIds = new Set(plan?.routines.map((r) => r.id));
-  const others = routines.filter((r) => r.starter_key && !planIds.has(r.id));
+  const browseLevel = browsing ?? settings.level ?? 'beginner';
+  const others = routines
+    .filter((r) => r.starter_key && !planIds.has(r.id) && r.level === browseLevel)
+    .sort(byStarterOrder);
   const today = new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
 
   return (
@@ -115,35 +118,21 @@ export default function WorkoutsScreen() {
         </Text>
       )}
 
-      <SectionHeader
-        title="More routines"
-        action={
-          <Button
-            title={showAll ? 'Hide' : `Show ${others.length}`}
-            kind="ghost"
-            size="sm"
-            onPress={() => setShowAll((v) => !v)}
-          />
-        }
-      />
-      {showAll
-        ? LEVELS.map((l) => {
-            const list = others.filter((r) => r.level === l.value);
-            if (!list.length) return null;
-            return (
-              <View key={l.value}>
-                <Text variant="label" color="textSecondary" style={{ marginVertical: Spacing.two }}>
-                  {l.label}
-                </Text>
-                {list.map((r) => (
-                  <RoutineCard key={r.id} routine={r} onStart={() => start(r.id)} />
-                ))}
-              </View>
-            );
-          })
-        : (
-          <Text variant="caption">Routines for other levels, plus bodyweight, band and kettlebell sessions.</Text>
-        )}
+      <SectionHeader title="More routines" />
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={{ gap: Spacing.two, paddingVertical: 2 }}
+        style={{ marginBottom: Spacing.three }}>
+        {LEVELS.map((l) => (
+          <Chip key={l.value} label={l.label} selected={browseLevel === l.value} onPress={() => setBrowsing(l.value)} />
+        ))}
+      </ScrollView>
+      {others.length ? (
+        others.map((r) => <RoutineCard key={r.id} routine={r} onStart={() => start(r.id)} />)
+      ) : (
+        <Text variant="caption">No other {levelLabel(browseLevel).toLowerCase()} routines.</Text>
+      )}
     </Screen>
   );
 }

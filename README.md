@@ -7,12 +7,15 @@ Fitness tracker app for condo-gym and home workouts, built with Expo (React Nati
 - **Exercise library**: 1,500 exercises from [ExerciseDB](https://github.com/exercisedb/exercisedb-api), each with a looping
   demo animation, target muscles, equipment and step-by-step instructions. Filter by body part, search, and limit to
   the equipment you actually have. A "Watch full video on YouTube" button opens a form-video search for any exercise.
-- **Plans by experience level**: Beginner (3-day full body), Intermediate (4-day upper/lower), Advanced (5-day
-  push/pull/legs) and Seasoned (6-day PPL with strength and volume days). Each has a suggested week, coaching notes,
-  and a "Next up" card that rotates through the plan, so a missed day just shifts it.
-- **Routines**: the plan routines plus bodyweight, band and kettlebell sessions; build your own or duplicate and tweak any.
-- **Workout logging**: weight × reps, reps only, or timed sets (switchable per exercise). Last session's numbers show as
-  placeholders: tick a set to log them unchanged. Rest timer, live duration and volume.
+- **Plans by experience level**: Beginner (3-day full body), Intermediate (4-day upper/lower, alternating A and B days),
+  Advanced (5-day push/pull/legs) and Seasoned (6-day PPL with strength and volume days). Each has a suggested week,
+  coaching notes, and a "Next up" card that rotates through the plan, so a missed day just shifts it.
+- **Routines**: 40 pre-designed routines across the four levels: the plan routines plus dumbbell, barbell, kettlebell,
+  bodyweight, band, gym-machine and conditioning sessions. Browse them by level; build your own or duplicate and tweak any.
+  Each exercise in a routine can carry a target weight.
+- **Workout logging**: weighted exercises (dumbbell, barbell, kettlebell, machines) log weight × reps; bodyweight ones
+  log reps, with "+ Weight" for a vest or belt; anything can be timed. Last session's numbers (or the routine's target)
+  show as placeholders: tick a set to log them unchanged. Rest timer, live duration and volume.
 - **History**: every workout with sets, reps and weights; per-exercise progress (heaviest set, estimated 1-rep max, trend chart).
 - **Profile and body metrics**: level, age (from birth year), height and BMI; log weight, body-fat % and
   waist/chest/hips/arm measurements over time with trend charts.

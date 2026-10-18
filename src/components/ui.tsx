@@ -263,12 +263,15 @@ export function Segmented<T extends string | number>({
   options,
   value,
   onChange,
+  size = 'md',
 }: {
   options: { value: T; label: string }[];
   value: T;
   onChange: (v: T) => void;
+  size?: 'sm' | 'md';
 }) {
   const theme = useTheme();
+  const sm = size === 'sm';
   return (
     <View style={[styles.segmented, { backgroundColor: theme.backgroundElement }]}>
       {options.map((o) => {
@@ -279,8 +282,12 @@ export function Segmented<T extends string | number>({
             accessibilityRole="button"
             accessibilityState={{ selected: active }}
             onPress={() => onChange(o.value)}
-            style={[styles.segment, active && { backgroundColor: theme.card }]}>
-            <RNText style={[styles.segmentText, { color: active ? theme.text : theme.textSecondary }]}>{o.label}</RNText>
+            style={[styles.segment, sm && { paddingVertical: 5 }, active && { backgroundColor: theme.card }]}>
+            <RNText
+              numberOfLines={1}
+              style={[styles.segmentText, sm && { fontSize: 13 }, { color: active ? theme.text : theme.textSecondary }]}>
+              {o.label}
+            </RNText>
           </Pressable>
         );
       })}

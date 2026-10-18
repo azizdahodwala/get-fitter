@@ -67,12 +67,42 @@ const NO_WEIGHT = new Set([
   'tennis ball',
 ]);
 
+/**
+ * Whether the exercise is loaded with weight you pick (dumbbell, kettlebell,
+ * barbell, machine stack...), as opposed to bodyweight or band work.
+ */
+export function usesWeight(e: Exercise | undefined) {
+  return !e || e.equipment.some((q) => !NO_WEIGHT.has(q));
+}
+
+/** Short equipment label for an exercise, e.g. "Dumbbell" or "Bodyweight". */
+export function equipmentLabel(e: Exercise | undefined) {
+  return e ? titleCase(e.equipment.join(' + ')) : '';
+}
+
 /** Best guess at how an exercise is logged; the user can switch it per workout. */
 export function defaultMode(e: Exercise | undefined): TrackingMode {
   if (!e) return 'weight';
   if (TIMED.test(e.name)) return 'time';
-  if (e.equipment.every((q) => NO_WEIGHT.has(q))) return 'reps';
-  return 'weight';
+  return usesWeight(e) ? 'weight' : 'reps';
+}
+
+/**
+ * The ways an exercise can be logged, its usual one first. On bodyweight
+ * exercises "weight" means load added on top (a vest, a belt, a dumbbell).
+ */
+export function modeOptions(e: Exercise | undefined): { value: TrackingMode; label: string }[] {
+  return usesWeight(e)
+    ? [
+        { value: 'weight', label: 'Weight × reps' },
+        { value: 'reps', label: 'Reps only' },
+        { value: 'time', label: 'Timed' },
+      ]
+    : [
+        { value: 'reps', label: 'Bodyweight' },
+        { value: 'weight', label: '+ Weight' },
+        { value: 'time', label: 'Timed' },
+      ];
 }
 
 export function youtubeSearchUrl(e: Exercise) {

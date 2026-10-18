@@ -1,17 +1,26 @@
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useEffect, useState } from 'react';
-import { StyleSheet, TextInput } from 'react-native';
+import { StyleSheet, TextInput, View } from 'react-native';
 
-import { Button, Card, ExerciseThumb, IconButton, Row, Screen, SectionHeader, Text } from '@/components/ui';
+import { Button, Card, ExerciseThumb, IconButton, Row, Screen, SectionHeader, Segmented, Text } from '@/components/ui';
 import { Radius, Spacing } from '@/constants/theme';
-import { displayName, getExercise, type TrackingMode } from '@/data/catalog';
-import { getRoutine, modeFor, saveRoutine, type RoutineItemInput } from '@/db/repo';
+import { displayName, getExercise, modeOptions, usesWeight, type TrackingMode } from '@/data/catalog';
+import {
+  getRoutine,
+  itemMode,
+  modeFor,
+  modePrefs,
+  saveRoutine,
+  setExerciseMode,
+  type RoutineItemInput,
+} from '@/db/repo';
 import { useTheme } from '@/hooks/use-theme';
 import { notify } from '@/lib/dialogs';
 import { pickExercises } from '@/lib/exercise-picker';
-import { parseCount, parseDuration } from '@/lib/format';
+import { formatDuration, formatWeight, parseCount, parseDuration, parseWeight } from '@/lib/format';
 import { goBack } from '@/lib/nav';
+import { useSettings } from '@/lib/settings';
 
 type DraftItem = RoutineItemInput & { key: string; mode: TrackingMode };
 
@@ -23,6 +32,7 @@ export default function EditRoutineScreen() {
   const routineId = id ? Number(id) : undefined;
   const db = useSQLiteContext();
   const theme = useTheme();
+  const { unit } = useSettings().settings;
   const [loaded, setLoaded] = useState(!routineId);
   const [name, setName] = useState('');
   const [notes, setNotes] = useState('');
@@ -32,15 +42,11 @@ export default function EditRoutineScreen() {
   useEffect(() => {
     if (!routineId) return;
     (async () => {
-      const found = await getRoutine(db, routineId);
+      const [found, prefs] = await Promise.all([getRoutine(db, routineId), modePrefs(db)]);
       if (found) {
         setName(found.routine.name);
         setNotes(found.routine.notes ?? '');
-        const draft: DraftItem[] = [];
-        for (const it of found.items) {
-          draft.push({ ...it, key: nextKey(), mode: it.seconds ? 'time' : await modeFor(db, it.exercise_id) });
-        }
-        setItems(draft);
+        setItems(found.items.map((it) => ({ ...it, key: nextKey(), mode: itemMode(it, prefs) })));
       }
       setLoaded(true);
     })();
@@ -57,6 +63,7 @@ export default function EditRoutineScreen() {
         sets: 3,
         reps: mode === 'time' ? null : 10,
         seconds: mode === 'time' ? 30 : null,
+        weight_kg: null,
         mode,
       });
     }
@@ -65,6 +72,15 @@ export default function EditRoutineScreen() {
 
   const patch = (key: string, p: Partial<DraftItem>) =>
     setItems((cur) => cur.map((it) => (it.key === key ? { ...it, ...p } : it)));
+
+  // Switching mode keeps the targets that still make sense and fills in defaults.
+  const changeMode = (it: DraftItem, mode: TrackingMode) =>
+    patch(it.key, {
+      mode,
+      reps: mode === 'time' ? null : (it.reps ?? 10),
+      seconds: mode === 'time' ? (it.seconds ?? 30) : null,
+      weight_kg: mode === 'weight' ? it.weight_kg : null,
+    });
 
   const move = (index: number, delta: number) =>
     setItems((cur) => {
@@ -82,8 +98,16 @@ export default function EditRoutineScreen() {
         id: routineId,
         name: name.trim(),
         notes: notes.trim() || null,
-        items: items.map(({ exercise_id, sets, reps, seconds }) => ({ exercise_id, sets, reps, seconds })),
+        items: items.map(({ exercise_id, sets, reps, seconds, weight_kg }) => ({
+          exercise_id,
+          sets,
+          reps,
+          seconds,
+          weight_kg,
+        })),
       });
+      // Remember the chosen mode so workouts log the exercise the same way.
+      for (const it of items) await setExerciseMode(db, it.exercise_id, it.mode);
       if (routineId) goBack();
       else router.replace({ pathname: '/routine/[id]', params: { id: String(savedId) } });
     } finally {
@@ -124,6 +148,7 @@ export default function EditRoutineScreen() {
       {items.map((it, index) => {
         const ex = getExercise(it.exercise_id);
         const timed = it.mode === 'time';
+        const weighted = usesWeight(ex);
         return (
           <Card key={it.key} style={styles.item}>
             <Row>
@@ -140,28 +165,47 @@ export default function EditRoutineScreen() {
                 onPress={() => setItems((cur) => cur.filter((x) => x.key !== it.key))}
               />
             </Row>
-            <Row gap={Spacing.three}>
-              <Row gap={4}>
-                <Text variant="caption">Sets</Text>
-                <IconButton icon="minus" label="Fewer sets" onPress={() => patch(it.key, { sets: Math.max(1, it.sets - 1) })} />
-                <Text variant="label" style={{ minWidth: 18, textAlign: 'center' }}>
-                  {it.sets}
-                </Text>
-                <IconButton icon="add" label="More sets" onPress={() => patch(it.key, { sets: Math.min(20, it.sets + 1) })} />
-              </Row>
-              <Row gap={6} style={{ flex: 1 }}>
-                <Text variant="caption">{timed ? 'Seconds' : 'Reps'}</Text>
+            <Segmented size="sm" options={modeOptions(ex)} value={it.mode} onChange={(m) => changeMode(it, m)} />
+            <Row gap={Spacing.three} style={{ alignItems: 'flex-start' }}>
+              <View style={styles.field}>
+                <Text variant="caption">SETS</Text>
+                <Row gap={2}>
+                  <IconButton icon="minus" label="Fewer sets" onPress={() => patch(it.key, { sets: Math.max(1, it.sets - 1) })} />
+                  <Text variant="label" style={{ minWidth: 18, textAlign: 'center' }}>
+                    {it.sets}
+                  </Text>
+                  <IconButton icon="add" label="More sets" onPress={() => patch(it.key, { sets: Math.min(20, it.sets + 1) })} />
+                </Row>
+              </View>
+              <View style={styles.field}>
+                <Text variant="caption">{timed ? 'TIME' : 'REPS'}</Text>
                 <TextInput
-                  defaultValue={String((timed ? it.seconds : it.reps) ?? '')}
-                  onChangeText={(t) =>
-                    patch(it.key, timed ? { seconds: parseDuration(t), reps: null } : { reps: parseCount(t), seconds: null })
-                  }
-                  keyboardType="number-pad"
-                  placeholder="—"
+                  key={`${it.key}-${it.mode}`}
+                  defaultValue={timed ? (it.seconds ? formatDuration(it.seconds) : '') : String(it.reps ?? '')}
+                  onChangeText={(t) => patch(it.key, timed ? { seconds: parseDuration(t) } : { reps: parseCount(t) })}
+                  keyboardType={timed ? 'numbers-and-punctuation' : 'number-pad'}
+                  placeholder={timed ? '0:30' : '—'}
                   placeholderTextColor={theme.textSecondary}
+                  selectTextOnFocus
                   style={[inputStyle, styles.small]}
+                  accessibilityLabel={`${displayName(ex)} ${timed ? 'time' : 'reps'} per set`}
                 />
-              </Row>
+              </View>
+              {it.mode === 'weight' ? (
+                <View style={styles.field}>
+                  <Text variant="caption">{weighted ? unit.toUpperCase() : `+${unit.toUpperCase()}`}</Text>
+                  <TextInput
+                    defaultValue={formatWeight(it.weight_kg, unit)}
+                    onChangeText={(t) => patch(it.key, { weight_kg: parseWeight(t, unit) })}
+                    keyboardType="decimal-pad"
+                    placeholder="—"
+                    placeholderTextColor={theme.textSecondary}
+                    selectTextOnFocus
+                    style={[inputStyle, styles.small]}
+                    accessibilityLabel={`${displayName(ex)} weight in ${unit}`}
+                  />
+                </View>
+              ) : null}
             </Row>
           </Card>
         );
@@ -176,5 +220,6 @@ const styles = StyleSheet.create({
   nameInput: { fontSize: 20, fontWeight: '700' },
   item: { gap: Spacing.two, marginBottom: Spacing.two },
   small: { width: 64, textAlign: 'center', paddingVertical: 6 },
+  field: { gap: 4 },
 });
 
