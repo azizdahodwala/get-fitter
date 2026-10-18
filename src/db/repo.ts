@@ -1,6 +1,6 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
-import { defaultMode, getExercise, type TrackingMode } from '@/data/catalog';
+import { defaultMode, getExercise, usesWeight, type TrackingMode } from '@/data/catalog';
 import type { Level } from '@/data/programs';
 
 // ---------- Types ----------
@@ -23,9 +23,11 @@ export type RoutineItem = {
   sets: number;
   reps: number | null;
   seconds: number | null;
+  /** Planned load per set, if the user set one. */
+  weight_kg: number | null;
 };
 
-export type RoutineItemInput = Pick<RoutineItem, 'exercise_id' | 'sets' | 'reps' | 'seconds'>;
+export type RoutineItemInput = Pick<RoutineItem, 'exercise_id' | 'sets' | 'reps' | 'seconds' | 'weight_kg'>;
 export type RoutineSummary = Routine & { exerciseIds: string[] };
 
 export type Workout = {
@@ -45,6 +47,7 @@ export type WorkoutExercise = {
   mode: TrackingMode;
   target_reps: number | null;
   target_seconds: number | null;
+  target_weight_kg: number | null;
 };
 
 export type SetRow = {
@@ -164,13 +167,14 @@ export async function saveRoutine(
     let position = 0;
     for (const it of input.items) {
       await db.runAsync(
-        'INSERT INTO routine_exercises (routine_id, exercise_id, position, sets, reps, seconds) VALUES (?, ?, ?, ?, ?, ?)',
+        'INSERT INTO routine_exercises (routine_id, exercise_id, position, sets, reps, seconds, weight_kg) VALUES (?, ?, ?, ?, ?, ?, ?)',
         id!,
         it.exercise_id,
         position++,
         it.sets,
         it.reps,
         it.seconds,
+        it.weight_kg,
       );
     }
   });
@@ -201,6 +205,37 @@ export async function modeFor(db: SQLiteDatabase, exerciseId: string): Promise<T
   return pref?.mode ?? defaultMode(getExercise(exerciseId));
 }
 
+/** Every exercise the user has picked a tracking mode for. */
+export async function modePrefs(db: SQLiteDatabase) {
+  const rows = await db.getAllAsync<{ exercise_id: string; mode: TrackingMode }>('SELECT * FROM exercise_prefs');
+  return new Map(rows.map((r) => [r.exercise_id, r.mode]));
+}
+
+/**
+ * How a routine item is logged: timed if it has a target time, by weight if it
+ * has a target weight, otherwise how the user usually logs the exercise.
+ */
+export function itemMode(
+  it: Pick<RoutineItem, 'exercise_id' | 'seconds' | 'weight_kg'>,
+  prefs: Map<string, TrackingMode>,
+): TrackingMode {
+  if (it.seconds) return 'time';
+  if (it.weight_kg != null) return 'weight';
+  const ex = getExercise(it.exercise_id);
+  const mode = prefs.get(it.exercise_id) ?? defaultMode(ex);
+  // An item with reps is never timed, even if the exercise usually is.
+  if (mode === 'time') return usesWeight(ex) ? 'weight' : 'reps';
+  return mode;
+}
+
+export async function setExerciseMode(db: SQLiteDatabase, exerciseId: string, mode: TrackingMode) {
+  await db.runAsync(
+    'INSERT INTO exercise_prefs (exercise_id, mode) VALUES (?, ?) ON CONFLICT(exercise_id) DO UPDATE SET mode = excluded.mode',
+    exerciseId,
+    mode,
+  );
+}
+
 export async function setWorkoutExerciseMode(
   db: SQLiteDatabase,
   workoutExerciseId: number,
@@ -208,11 +243,7 @@ export async function setWorkoutExerciseMode(
   mode: TrackingMode,
 ) {
   await db.runAsync('UPDATE workout_exercises SET mode = ? WHERE id = ?', mode, workoutExerciseId);
-  await db.runAsync(
-    'INSERT INTO exercise_prefs (exercise_id, mode) VALUES (?, ?) ON CONFLICT(exercise_id) DO UPDATE SET mode = excluded.mode',
-    exerciseId,
-    mode,
-  );
+  await setExerciseMode(db, exerciseId, mode);
 }
 
 // ---------- Workouts ----------
@@ -250,18 +281,19 @@ async function insertWorkoutExercise(
   workoutId: number,
   position: number,
   exerciseId: string,
+  mode: TrackingMode,
   setCount: number,
-  target: { reps: number | null; seconds: number | null },
+  target: { reps: number | null; seconds: number | null; weight_kg: number | null },
 ) {
-  const mode = await modeFor(db, exerciseId);
   const { lastInsertRowId } = await db.runAsync(
-    'INSERT INTO workout_exercises (workout_id, exercise_id, position, mode, target_reps, target_seconds) VALUES (?, ?, ?, ?, ?, ?)',
+    'INSERT INTO workout_exercises (workout_id, exercise_id, position, mode, target_reps, target_seconds, target_weight_kg) VALUES (?, ?, ?, ?, ?, ?, ?)',
     workoutId,
     exerciseId,
     position,
     mode,
     target.reps,
     target.seconds,
+    target.weight_kg,
   );
   for (let i = 0; i < setCount; i++) {
     await db.runAsync('INSERT INTO sets (workout_exercise_id, position) VALUES (?, ?)', lastInsertRowId, i);
@@ -272,6 +304,7 @@ async function insertWorkoutExercise(
 export async function startWorkout(db: SQLiteDatabase, routineId?: number) {
   const now = Date.now();
   const routine = routineId ? await getRoutine(db, routineId) : null;
+  const prefs = await modePrefs(db);
   let workoutId = 0;
   await db.withTransactionAsync(async () => {
     const res = await db.runAsync(
@@ -283,9 +316,10 @@ export async function startWorkout(db: SQLiteDatabase, routineId?: number) {
     workoutId = res.lastInsertRowId;
     let position = 0;
     for (const it of routine?.items ?? []) {
-      await insertWorkoutExercise(db, workoutId, position++, it.exercise_id, Math.max(1, it.sets), {
+      await insertWorkoutExercise(db, workoutId, position++, it.exercise_id, itemMode(it, prefs), Math.max(1, it.sets), {
         reps: it.reps,
         seconds: it.seconds,
+        weight_kg: it.weight_kg,
       });
     }
   });
@@ -326,9 +360,10 @@ export async function addExercisesToWorkout(db: SQLiteDatabase, workoutId: numbe
   await db.withTransactionAsync(async () => {
     for (const exerciseId of exerciseIds) {
       const prev = await previousSets(db, exerciseId, workout.started_at, workoutId);
-      await insertWorkoutExercise(db, workoutId, position++, exerciseId, prev.length || 3, {
+      await insertWorkoutExercise(db, workoutId, position++, exerciseId, await modeFor(db, exerciseId), prev.length || 3, {
         reps: null,
         seconds: null,
+        weight_kg: null,
       });
     }
   });
@@ -516,9 +551,9 @@ export async function deleteBodyMetric(db: SQLiteDatabase, id: number) {
 const TABLES = {
   settings: ['key', 'value'],
   routines: ['id', 'name', 'notes', 'starter_key', 'level', 'created_at', 'updated_at'],
-  routine_exercises: ['id', 'routine_id', 'exercise_id', 'position', 'sets', 'reps', 'seconds'],
+  routine_exercises: ['id', 'routine_id', 'exercise_id', 'position', 'sets', 'reps', 'seconds', 'weight_kg'],
   workouts: ['id', 'routine_id', 'name', 'notes', 'started_at', 'finished_at'],
-  workout_exercises: ['id', 'workout_id', 'exercise_id', 'position', 'mode', 'target_reps', 'target_seconds'],
+  workout_exercises: ['id', 'workout_id', 'exercise_id', 'position', 'mode', 'target_reps', 'target_seconds', 'target_weight_kg'],
   sets: ['id', 'workout_exercise_id', 'position', 'weight_kg', 'reps', 'seconds', 'done'],
   exercise_prefs: ['exercise_id', 'mode'],
   body_metrics: ['id', 'measured_at', 'weight_kg', 'body_fat', 'waist_cm', 'chest_cm', 'hips_cm', 'arm_cm'],

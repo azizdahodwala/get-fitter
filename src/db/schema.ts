@@ -2,7 +2,7 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 import { Platform } from 'react-native';
 
 import { defaultMode, getExercise } from '@/data/catalog';
-import { STARTER_ROUTINES } from '@/data/programs';
+import { STARTER_ROUTINES, type StarterRoutine } from '@/data/programs';
 
 export const DATABASE_NAME = 'get-fitter.db';
 
@@ -79,6 +79,14 @@ const MIGRATIONS: string[] = [
   CREATE INDEX idx_workout_exercises_exercise ON workout_exercises(exercise_id);
   CREATE INDEX idx_sets_workout_exercise ON sets(workout_exercise_id, position);
   `,
+  // Target weights on routines, carried into workouts started from them; the
+  // intermediate plan's original routines become its "A" days.
+  `
+  ALTER TABLE routine_exercises ADD COLUMN weight_kg REAL;
+  ALTER TABLE workout_exercises ADD COLUMN target_weight_kg REAL;
+  UPDATE routines SET name = 'Intermediate Upper A' WHERE starter_key = 'int-upper' AND name = 'Intermediate Upper';
+  UPDATE routines SET name = 'Intermediate Lower A' WHERE starter_key = 'int-lower' AND name = 'Intermediate Lower';
+  `,
 ];
 
 export async function migrateDb(db: SQLiteDatabase) {
@@ -91,16 +99,16 @@ export async function migrateDb(db: SQLiteDatabase) {
     const v = version;
     await db.withTransactionAsync(async () => {
       await db.execAsync(MIGRATIONS[v]);
-      if (v === 0) await seedStarterRoutines(db);
+      await seedStarterRoutines(db, STARTER_ROUTINES.filter((r) => (r.since ?? 0) === v));
       await db.execAsync(`PRAGMA user_version = ${v + 1}`);
     });
     version++;
   }
 }
 
-async function seedStarterRoutines(db: SQLiteDatabase) {
+async function seedStarterRoutines(db: SQLiteDatabase, routines: StarterRoutine[]) {
   const now = Date.now();
-  for (const r of STARTER_ROUTINES) {
+  for (const r of routines) {
     const { lastInsertRowId } = await db.runAsync(
       'INSERT INTO routines (name, notes, starter_key, level, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
       r.name,

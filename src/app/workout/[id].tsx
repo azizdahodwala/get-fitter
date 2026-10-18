@@ -6,9 +6,9 @@ import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { Elapsed } from '@/components/elapsed';
 import { RestTimer } from '@/components/rest-timer';
 import { COL, SetRowView } from '@/components/set-row';
-import { Button, Card, EmptyState, ExerciseThumb, Icon, IconButton, Row, Screen, Tag, Text } from '@/components/ui';
+import { Button, Card, EmptyState, ExerciseThumb, Icon, IconButton, Row, Screen, Segmented, Text } from '@/components/ui';
 import { Radius, Spacing } from '@/constants/theme';
-import { displayName, getExercise, type TrackingMode } from '@/data/catalog';
+import { displayName, equipmentLabel, getExercise, modeOptions, usesWeight, type TrackingMode } from '@/data/catalog';
 import {
   addExercisesToWorkout,
   addSet,
@@ -27,12 +27,9 @@ import {
 import { useTheme } from '@/hooks/use-theme';
 import { confirm, haptics } from '@/lib/dialogs';
 import { pickExercises } from '@/lib/exercise-picker';
-import { formatDate, formatDuration, formatSpan, formatTime, formatVolume, type Unit } from '@/lib/format';
+import { formatDate, formatDuration, formatSpan, formatTime, formatVolume, formatWeight, type Unit } from '@/lib/format';
 import { useSettings } from '@/lib/settings';
 import { goBack } from '@/lib/nav';
-
-const NEXT_MODE: Record<TrackingMode, TrackingMode> = { weight: 'reps', reps: 'time', time: 'weight' };
-const MODE_LABEL: Record<TrackingMode, string> = { weight: 'Weight × reps', reps: 'Reps only', time: 'Timed' };
 
 function hasValues(s: SetValues) {
   return s.weight_kg != null || s.reps != null || s.seconds != null;
@@ -203,8 +200,7 @@ export default function WorkoutScreen() {
               const s = await addSet(db, we.id);
               updateExercise(we.id, (x) => ({ ...x, sets: [...x.sets, s] }));
             }}
-            onMode={async () => {
-              const mode = NEXT_MODE[we.mode];
+            onMode={async (mode) => {
               await setWorkoutExerciseMode(db, we.id, we.exercise_id, mode);
               updateExercise(we.id, (x) => ({ ...x, mode }));
             }}
@@ -269,15 +265,20 @@ function ExerciseBlock({
   onSetChange: (s: SetRow) => void;
   onSetDelete: (setId: number) => void;
   onAddSet: () => void;
-  onMode: () => void;
+  onMode: (mode: TrackingMode) => void;
   onRemove: () => void;
   onCompleted: () => void;
 }) {
   const ex = getExercise(we.exercise_id);
-  const target =
-    we.target_seconds || we.target_reps
-      ? `Target ${we.target_seconds ? formatDuration(we.target_seconds) : `${we.target_reps} reps`} per set`
-      : null;
+  // On bodyweight moves the weight column is load added on top of you.
+  const plus = usesWeight(ex) ? '' : '+';
+  const weightHeader = `${plus}${unit.toUpperCase()}`;
+  const planned =
+    we.mode === 'weight' && we.target_weight_kg != null ? `${plus}${formatWeight(we.target_weight_kg, unit)} ${unit}` : null;
+  let target: string | null = null;
+  if (we.target_seconds) target = `${formatDuration(we.target_seconds)} per set`;
+  else if (we.target_reps) target = planned ? `${planned} × ${we.target_reps} reps` : `${we.target_reps} reps per set`;
+  else if (planned) target = `${planned} per set`;
 
   // Placeholder for each row: last session's matching set, else the row above, else the routine target.
   const hints: (SetValues | null)[] = [];
@@ -286,7 +287,7 @@ function ExerciseBlock({
     hints.push(
       we.previous[i] ??
         (above && hasValues(above) ? above : (hints[i - 1] ?? null)) ??
-        (target ? { weight_kg: null, reps: we.target_reps, seconds: we.target_seconds } : null),
+        (target ? { weight_kg: we.target_weight_kg, reps: we.target_reps, seconds: we.target_seconds } : null),
     );
   });
 
@@ -302,17 +303,14 @@ function ExerciseBlock({
             <Text variant="label" color="accent" numberOfLines={2}>
               {displayName(ex)}
             </Text>
-            {target ? <Text variant="caption">{target}</Text> : null}
+            <Text variant="caption" numberOfLines={2}>
+              {[equipmentLabel(ex), target && `Target ${target}`].filter(Boolean).join(' · ')}
+            </Text>
           </View>
         </Pressable>
         <IconButton icon="trash" label="Remove exercise" onPress={onRemove} />
       </Row>
-      <Pressable onPress={onMode} accessibilityRole="button" accessibilityHint="Switch how this exercise is logged" style={{ alignSelf: 'flex-start' }}>
-        <Row gap={4}>
-          <Tag label={MODE_LABEL[we.mode]} />
-          <Icon name="swap" size={12} color="textSecondary" />
-        </Row>
-      </Pressable>
+      <Segmented size="sm" options={modeOptions(ex)} value={we.mode} onChange={onMode} />
 
       <View style={styles.headerRow}>
         <Text variant="caption" style={{ width: COL.set, textAlign: 'center' }}>
@@ -323,7 +321,7 @@ function ExerciseBlock({
         </Text>
         {we.mode === 'weight' ? (
           <Text variant="caption" style={{ width: COL.value, textAlign: 'center' }}>
-            {unit.toUpperCase()}
+            {weightHeader}
           </Text>
         ) : null}
         <Text variant="caption" style={{ width: COL.value, textAlign: 'center' }}>

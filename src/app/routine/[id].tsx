@@ -6,10 +6,19 @@ import { View } from 'react-native';
 import { ExerciseRow } from '@/components/exercise-browser';
 import { Button, Card, EmptyState, Row, Screen, Text } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
-import { getExercise } from '@/data/catalog';
-import { deleteRoutine, duplicateRoutine, getRoutine, type Routine, type RoutineItem } from '@/db/repo';
+import { getExercise, usesWeight, type TrackingMode } from '@/data/catalog';
+import {
+  deleteRoutine,
+  duplicateRoutine,
+  getRoutine,
+  itemMode,
+  modePrefs,
+  type Routine,
+  type RoutineItem,
+} from '@/db/repo';
 import { confirm } from '@/lib/dialogs';
-import { formatDuration } from '@/lib/format';
+import { formatDuration, formatWeight, type Unit } from '@/lib/format';
+import { useSettings } from '@/lib/settings';
 import { startWorkoutFlow } from '@/lib/workout-flow';
 import { goBack } from '@/lib/nav';
 
@@ -18,16 +27,28 @@ export function targetLabel(it: Pick<RoutineItem, 'sets' | 'reps' | 'seconds'>) 
   return `${it.sets} × ${per}`;
 }
 
+/** What each set is loaded with: the planned weight, or how the exercise is done. */
+function loadLabel(it: RoutineItem, mode: TrackingMode, unit: Unit) {
+  if (mode === 'time') return null;
+  const weighted = usesWeight(getExercise(it.exercise_id));
+  if (mode === 'reps') return weighted ? 'Reps only' : 'Bodyweight';
+  if (it.weight_kg == null) return weighted ? 'Weighted' : 'Bodyweight + weight';
+  return `${weighted ? '' : '+'}${formatWeight(it.weight_kg, unit)} ${unit}`;
+}
+
 export default function RoutineScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const routineId = Number(id);
   const db = useSQLiteContext();
-  const [data, setData] = useState<{ routine: Routine; items: RoutineItem[] } | null | undefined>(undefined);
+  const { settings } = useSettings();
+  const [data, setData] = useState<
+    { routine: Routine; items: RoutineItem[]; prefs: Map<string, TrackingMode> } | null | undefined
+  >(undefined);
 
   useFocusEffect(
     useCallback(() => {
       let live = true;
-      getRoutine(db, routineId).then((r) => live && setData(r));
+      Promise.all([getRoutine(db, routineId), modePrefs(db)]).then(([r, prefs]) => live && setData(r && { ...r, prefs }));
       return () => {
         live = false;
       };
@@ -36,7 +57,9 @@ export default function RoutineScreen() {
 
   if (data === undefined) return null;
   if (data === null) return <EmptyState icon="search" title="Routine not found" />;
-  const { routine, items } = data;
+  const { routine, items, prefs } = data;
+  const modes = items.map((it) => itemMode(it, prefs));
+  const unplanned = items.some((it, i) => modes[i] === 'weight' && it.weight_kg == null);
 
   async function onDuplicate() {
     const newId = await duplicateRoutine(db, routineId);
@@ -88,14 +111,22 @@ export default function RoutineScreen() {
 
       <Card style={{ paddingVertical: Spacing.one }}>
         {items.length ? (
-          items.map((it) => {
+          items.map((it, i) => {
             const ex = getExercise(it.exercise_id);
+            const load = loadLabel(it, modes[i], settings.unit);
             return ex ? (
               <ExerciseRow
                 key={it.id}
                 exercise={ex}
                 onPress={() => router.push({ pathname: '/exercise/[id]', params: { id: ex.id } })}
-                right={<Text variant="label" color="textSecondary">{targetLabel(it)}</Text>}
+                right={
+                  <View style={{ alignItems: 'flex-end' }}>
+                    <Text variant="label" color="textSecondary">
+                      {targetLabel(it)}
+                    </Text>
+                    {load ? <Text variant="caption">{load}</Text> : null}
+                  </View>
+                }
               />
             ) : null;
           })
@@ -103,6 +134,11 @@ export default function RoutineScreen() {
           <EmptyState icon="dumbbell" title="No exercises yet" message="Tap Edit to add some." />
         )}
       </Card>
+      {unplanned ? (
+        <Text variant="caption" style={{ marginTop: Spacing.two }}>
+          Tap Edit to plan a weight for the weighted exercises. You log the weight you actually lift during the workout.
+        </Text>
+      ) : null}
 
       <View style={{ marginTop: Spacing.four, gap: Spacing.two }}>
         <Row gap={Spacing.two}>

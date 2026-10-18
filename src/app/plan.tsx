@@ -6,7 +6,7 @@ import { Pressable, ScrollView, View } from 'react-native';
 import { RoutineCard } from '@/components/routine-card';
 import { Button, Card, Chip, Icon, Row, Screen, SectionHeader, Tag, Text } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
-import { LEVELS, programFor, WEEKDAYS, type Level } from '@/data/programs';
+import { byStarterOrder, LEVELS, programFor, WEEKDAYS, type Level } from '@/data/programs';
 import { listRoutines, type RoutineSummary } from '@/db/repo';
 import { programRoutines } from '@/lib/plan';
 import { useSettings } from '@/lib/settings';
@@ -32,6 +32,10 @@ export default function PlanScreen() {
   const program = programFor(viewing)!;
   const { byKey, routines: planRoutines } = programRoutines(program, routines);
   const isMine = viewing === settings.level;
+  const planIds = new Set(planRoutines.map((r) => r.id));
+  const extras = routines
+    .filter((r) => r.starter_key && r.level === viewing && !planIds.has(r.id))
+    .sort(byStarterOrder);
 
   return (
     <Screen>
@@ -104,6 +108,18 @@ export default function PlanScreen() {
       {planRoutines.map((r) => (
         <RoutineCard key={r.id} routine={r} onStart={() => startWorkoutFlow(db, r.id)} />
       ))}
+
+      {extras.length ? (
+        <>
+          <SectionHeader title={`More ${LEVELS.find((l) => l.value === viewing)!.label.toLowerCase()} workouts`} />
+          <Text variant="caption" style={{ marginBottom: Spacing.two }}>
+            Swap one in for a plan day, or add it as an extra session.
+          </Text>
+          {extras.map((r) => (
+            <RoutineCard key={r.id} routine={r} onStart={() => startWorkoutFlow(db, r.id)} />
+          ))}
+        </>
+      ) : null}
 
       <Text variant="caption" style={{ marginTop: Spacing.four, textAlign: 'center' }}>
         General fitness guidance, not medical advice. Check with a doctor before starting if you have health concerns.
